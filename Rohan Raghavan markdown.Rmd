@@ -1,0 +1,82 @@
+---
+title: "Project writeup"
+author: "Rohan Raghavan"
+date: "Sunday, January 25, 2015"
+output: html_document
+---
+
+
+```{r chunkLabel}
+library(caret)
+library(tables)
+library(AppliedPredictiveModeling)
+library(doParallel)
+
+cl <- makeCluster(detectCores())
+registerDoParallel(cl)
+
+setwd("C:/Users/RR.RR-PC/Documents/R/Coursera Practical Machine Learning course")
+dat_train=read.csv("pml-training.csv",T,na.strings=c(" ","NA"))
+dat_test=read.csv("pml-testing.csv",T,na.strings=c(" ","NA"))
+set.seed(1234)
+
+#filtering based on NAs - working out an index based on % of NAs in rows
+rem_var=colSums(is.na(dat_train))/dim(dat_train)[1]
+rem_var_ind=rem_var<0.25
+#summary(dat_train)
+
+#removing all rows with more than 25% NAs
+dat_train=dat_train[,rem_var_ind]
+colSums(is.na(dat_train))/dim(dat_train)[1]
+
+#col index that will be used to remove data that is irrelavant as predictors
+rem=c(1:7)
+
+#create partitions for training and test sets out of what is provided as the training data file
+set=createDataPartition(dat_train$classe,p=0.7,list=FALSE)
+training=dat_train[set,]
+testing=dat_train[-set,]
+
+#Checking for additional nonzero variance across candidate predictors
+#only one variable identified as nearzero Var so left all in fro feature selection
+nearZeroVar(training,freqCut=90/10)
+
+#data visualisations, created multiple to inspect relationships
+featurePlot(training[,8:10],training$classe,plot="box",auto.key=list(columns=5))
+
+
+#finding variables that are highly correlated
+a=findCorrelation(cor(training[,-c(rem,60)]),cutoff=0.8,verbose=FALSE)
+```
+
+``` {r eval=FALSE}
+fitControl <- trainControl(## 10-fold CV
+  method = "repeatedcv",
+  number = 10,
+  ## repeated 10 times
+  repeats = 10)
+
+#######################################################
+#top-level randomForest for feature selection 
+#####################################
+
+mod=train(as.factor(classe)~.,data=training[,-rem],trControl=fitControl,method="rf",verbose=FALSE)
+mod_conf=confusionMatrix(predict(mod$finalModel,testing,type="class"),testing$classe)
+mod_conf1=confusionMatrix(predict(mod$finalModel,training,type="class"),training$classe)
+mod_conf  # test set accuracy
+mod_conf1 # in sample accurace
+
+#I chose RandomForests, because of their supeiority in handling classification problems.
+
+#Internal repeatedcv cross validation allow for 10 fold runs repeated 10 times over so this is a pretty robust model building method. More over, the test accuracies below have verified the ability of the model needing no change to training method
+
+### in sample accuracy of 99.86%
+### Expected test set accuracy of 99.56%
+
+#Sensitiviy and specificity in both were in excees of 99%
+
+#There was no need to tinker with this model further in the way of reducing features to reduce variance in #test estimates as it was already so high. In addition, all the features used were available in the test set. 
+
+#Submission of estimates on the test data supplied yielded a 20/20 result.
+
+```
